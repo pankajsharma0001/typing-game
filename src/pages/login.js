@@ -18,6 +18,10 @@ export default function Login() {
     else alert("Invalid username or password");
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") handleLogin();
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
       <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-md">
@@ -35,15 +39,23 @@ export default function Login() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={handleKeyDown}
           className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800"
         />
 
         <button
           onClick={handleLogin}
-          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 shadow-md"
+          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-2 shadow-md"
         >
           Login
         </button>
+
+        {/* Forgot Password link below Login button */}
+        <div className="text-center mb-4">
+          <a href="/forgot-password" className="text-sm text-purple-600 hover:underline">
+            Forgot Password?
+          </a>
+        </div>
 
         <div className="flex items-center mb-4">
           <hr className="flex-grow border-gray-300" />
@@ -53,7 +65,7 @@ export default function Login() {
 
         <button
           onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-          className="flex items-center justify-center w-full border border-gray-300 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors mb-4"
+          className="flex items-center justify-center w-full border border-gray-500 px-4 py-3 rounded-lg hover:bg-gray-300 transition-colors mb-4 text-gray-700 font-semibold"
         >
           <img src="/google-logo.svg" alt="Google Logo" className="w-6 h-6 mr-3" />
           Login with Google

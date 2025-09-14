@@ -1,40 +1,47 @@
-// components/TypingGame.js
 import { useState, useEffect, useRef } from "react";
-import { getSession, useSession, signIn } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import axios from "axios";
 
 export default function TypingGame() {
   const startTimeRef = useRef(null);
-  const { data: session, update: updateSession } = useSession();
+  const containerRef = useRef(null);
+  const { data: session } = useSession();
 
   const [difficulty, setDifficulty] = useState("easy");
   const [sentences, setSentences] = useState([]);
-  const [sentence, setSentence] = useState("");
   const [timer, setTimer] = useState("30s");
   const [timeLeft, setTimeLeft] = useState(30);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [typedText, setTypedText] = useState("");
+
+  const [windowLineIndex, setWindowLineIndex] = useState(0); // Index of first visible line
+  const [visibleLines, setVisibleLines] = useState([]);
+
+  // Add this state to track correct characters for each completed line
+  const [completedLinesStats, setCompletedLinesStats] = useState([]);
 
   const timerInSeconds =
     timer === "15s" ? 15 : timer === "30s" ? 30 : timer === "1m" ? 60 : Infinity;
 
-  // Fetch sentences on difficulty/timer change
+  // Fetch sentences
   useEffect(() => {
     setTimeLeft(timerInSeconds);
-    setCurrentSentenceIndex(0);
-    setTypedText("");
-    setFinished(false);
     setStarted(false);
+    setFinished(false);
+    setTypedText("");
+    setWindowLineIndex(0);
+    setVisibleLines([]);
 
     async function fetchSentences() {
       try {
-        const res = await axios.get(`/api/sentences?difficulty=${difficulty}`);
-        setSentences(res.data);
-        if (res.data.length > 0) setSentence(res.data[0].text);
+        const res = await axios.get(
+          `/api/sentences?difficulty=${difficulty}&count=20`
+        );
+        setSentences(res.data.map((s) => ({ text: s.text || "" })));
       } catch (err) {
-        console.error("Failed to fetch sentences", err);
+        console.error(err);
+        setSentences([]);
       }
     }
 
@@ -52,124 +59,197 @@ export default function TypingGame() {
     return () => clearInterval(interval);
   }, [timeLeft, started, finished]);
 
+  // Utility: wrap index
+  const wrapIndex = (idx) => {
+    if (!sentences.length) return 0;
+    return idx % sentences.length;
+  };
+
+  // Update visible lines
+  useEffect(() => {
+    if (!sentences.length) return;
+    const firstIdx = wrapIndex(windowLineIndex);
+    const secondIdx = wrapIndex(windowLineIndex + 1);
+
+    setVisibleLines([
+      sentences[firstIdx]?.text || "",
+      sentences[secondIdx]?.text || "",
+    ]);
+  }, [windowLineIndex, sentences]);
+
   const startGame = () => {
     setStarted(true);
     setFinished(false);
     setTypedText("");
     setTimeLeft(timerInSeconds);
+    setCompletedLinesStats([]); // Reset stats
     startTimeRef.current = Date.now();
   };
 
-  const handleNextSentence = () => {
-    const nextIndex = currentSentenceIndex + 1;
-    if (nextIndex < sentences.length) {
-      setCurrentSentenceIndex(nextIndex);
-      setSentence(sentences[nextIndex].text);
+  // Advance line when fully typed
+  useEffect(() => {
+    if (!started || finished || !visibleLines.length) return;
+    const currentLine = visibleLines[0];
+
+    // Advance to next line when length matches, regardless of mistakes
+    if (typedText.length === currentLine.length) {
+      // Calculate correct characters for this line
+      const correctChars = [...typedText].filter(
+        (char, idx) => char === currentLine[idx]
+      ).length;
+
+      // Store the stats for this line
+      setCompletedLinesStats(prev => [...prev, {
+        total: currentLine.length,
+        correct: correctChars
+      }]);
+
+      setWindowLineIndex(prev => prev + 1);
       setTypedText("");
-    } else if (timer !== "Unlimited") {
-      finishGame();
     }
-  };
+  }, [typedText, visibleLines, started, finished]);
 
   const finishGame = async () => {
-  setFinished(true);
+    setFinished(true);
+    if (!session) {
+      signIn();
+      return;
+    }
 
-  if (!session) {
-    signIn(); // redirect to login if no session
-    return;
-  }
+    // Calculate total characters typed and correct characters
+    let totalChars = 0;
+    let totalCorrectChars = 0;
 
-  const currentSentence = sentences[currentSentenceIndex]?.text || "";
-  const correctChars = [...typedText].filter((c, i) => c === currentSentence[i]).length;
-  const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-  const minutes = Math.max(1, elapsedMs / 1000) / 60;
-  const wpm = Math.round((correctChars / 5) / minutes);
-  const accuracy = currentSentence.length
-    ? Math.round((correctChars / currentSentence.length) * 100)
-    : 0;
+    // Count completed lines using stored stats
+    completedLinesStats.forEach(stat => {
+      totalChars += stat.total;
+      totalCorrectChars += stat.correct;
+    });
 
-  try {
-    await axios.post("/api/games", { wpm, accuracy, score: correctChars, difficulty });
-    alert(`Game finished! WPM: ${wpm}, Accuracy: ${accuracy}%`);
-  } catch (err) {
-    console.error(err);
-    alert("Failed to save results. Make sure you are logged in.");
-  }
+    // Add current line stats
+    const currentLine = visibleLines[0] || "";
+    if (typedText.length > 0) {
+      totalChars += typedText.length;
+      totalCorrectChars += [...typedText].filter(
+        (char, idx) => char === currentLine[idx]
+      ).length;
+    }
 
-  setStarted(false);
-  setFinished(false);
-};
+    // Calculate time in minutes (minimum 1 second to avoid division by zero)
+    const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+    const minutes = Math.max(0.0166667, elapsedMs / 1000 / 60); // Minimum 1 second
 
+    // Calculate WPM (standard: 5 characters = 1 word)
+    const wpm = Math.round((totalCorrectChars / 5) / minutes);
 
-  // Auto next sentence when fully typed
-  useEffect(() => {
-    if (!started || finished) return;
-    const currentSentence = sentences[currentSentenceIndex]?.text || "";
-    if (typedText.length >= currentSentence.length) handleNextSentence();
-  }, [typedText, started, finished, currentSentenceIndex, sentences]);
+    // Calculate accuracy
+    const accuracy = totalChars > 0 
+      ? Math.round((totalCorrectChars / totalChars) * 100)
+      : 0;
+
+    try {
+      await axios.post("/api/games", { 
+        wpm, 
+        accuracy, 
+        score: totalCorrectChars, 
+        difficulty 
+      });
+      alert(`Game finished! WPM: ${wpm}, Accuracy: ${accuracy}%`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save results.");
+    }
+
+    // Reset all game state
+    setStarted(false);
+    setFinished(false);
+    setTypedText("");
+    setWindowLineIndex(0);
+    setCompletedLinesStats([]); // Reset stats
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6 bg-white rounded-3xl shadow-2xl">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Typing Game</h2>
+      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">
+        Typing Game
+      </h2>
 
-      {/* Difficulty Selector */}
-      <div className="flex gap-4 mb-4 justify-center items-center">
-        <span className="font-medium text-gray-700">Difficulty:</span>
-        {["easy", "medium", "hard"].map((level) => (
-          <button
-            key={level}
-            onClick={() => setDifficulty(level)}
-            className={`px-4 py-2 rounded-lg font-semibold transition ${
-              difficulty === level
-                ? "bg-purple-700 text-white shadow-lg"
-                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-            }`}
-          >
-            {level.charAt(0).toUpperCase() + level.slice(1)}
-          </button>
-        ))}
-      </div>
+      {/* Controls */}
+      {!started && (
+        <div className="flex justify-center items-center gap-6 mb-6">
+          {["easy", "medium", "hard"].map((level) => (
+            <button
+              key={level}
+              onClick={() => setDifficulty(level)}
+              className={`px-4 py-2 rounded-lg font-semibold transition ${
+                difficulty === level
+                  ? "bg-purple-700 text-white shadow-lg"
+                  : "bg-gray-300 text-gray-800 hover:bg-gray-400"
+              }`}
+            >
+              {level.charAt(0).toUpperCase() + level.slice(1)}
+            </button>
+          ))}
+          <div className="h-8 w-px bg-gray-300"></div>
+          {["15s", "30s", "1m", "Unlimited"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTimer(t)}
+              className={`px-4 py-2 rounded-lg font-semibold transition ${
+                timer === t
+                  ? "bg-purple-700 text-white"
+                  : "bg-gray-300 text-gray-800 hover:bg-gray-400"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Timer Selector */}
-      <div className="flex gap-4 mb-6 justify-center items-center">
-        <span className="font-medium text-gray-700">Timer:</span>
-        {["15s", "30s", "1m", "Unlimited"].map((t) => (
-          <button
-            key={t}
-            onClick={() => setTimer(t)}
-            className={`px-3 py-1 rounded-lg font-semibold transition ${
-              timer === t
-                ? "bg-purple-700 text-white"
-                : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-        <span className="ml-4 font-mono text-gray-900 font-bold">
-          {timeLeft === Infinity ? "∞" : timeLeft}s
-        </span>
-      </div>
+      {/* Timer */}
+      {started && timer !== "Unlimited" && (
+        <div className="text-center mb-4 font-mono text-xl font-bold text-gray-900">
+          {timeLeft}s
+        </div>
+      )}
 
       {/* Sentence Display */}
-      <div className="mb-4 p-4 bg-purple-50 rounded-lg text-gray-400 font-mono text-lg leading-relaxed">
-        {(sentences[currentSentenceIndex]?.text || "").split("").map((char, idx) => {
-          let colorClass = "text-gray-400";
-          if (idx < typedText.length) colorClass = typedText[idx] === char ? "text-green-600" : "text-red-600";
-          return <span key={idx} className={colorClass}>{char}</span>;
-        })}
+      <div
+        ref={containerRef}
+        className="mb-4 p-4 bg-purple-50 rounded-lg font-mono text-lg leading-relaxed h-[4.5rem] overflow-hidden text-gray-400"
+      >
+        {visibleLines.map((line, lineIdx) => (
+          <div key={`line-${lineIdx}`} className="whitespace-pre">
+            {line.split("").map((char, charIdx) => {
+              let colorClass = "text-gray-400";
+              if (lineIdx === 0 && charIdx < typedText.length) {
+                colorClass =
+                  typedText[charIdx] === char ? "text-green-600" : "text-red-600";
+              }
+              return (
+                <span key={`${lineIdx}-${charIdx}`} className={colorClass}>
+                  {char}
+                </span>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
-      {/* User Input */}
+      {/* Input */}
       <textarea
         value={typedText}
-        onChange={(e) => setTypedText(e.target.value)}
+        onChange={(e) => {
+          if (!started || finished) return;
+          setTypedText(e.target.value);
+        }}
         className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 mb-4 text-gray-900"
         disabled={!started || finished}
         rows={4}
       />
 
-      {/* Controls */}
+      {/* Start / Finish */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
         {!started && (
           <button
@@ -179,7 +259,7 @@ export default function TypingGame() {
             Start
           </button>
         )}
-        {started && !finished && (
+        {started && !finished && timer === "Unlimited" && (
           <button
             onClick={finishGame}
             className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors"

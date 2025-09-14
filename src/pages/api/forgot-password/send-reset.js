@@ -26,12 +26,13 @@ export default async function handler(req, res) {
 
     // 1. Generate a unique token
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpire = Date.now() + 1000 * 60 * 30; // 30 minutes
+    const resetTokenExpire = new Date(Date.now() + 1000 * 60 * 30); // 30 minutes
 
     // 2. Save token & expiry in user document
     user.resetToken = resetToken;
     user.resetTokenExpire = resetTokenExpire;
     await user.save();
+    console.log("Saved user:", user);
 
     // ✅ Debug logs for env vars (won’t print full password)
     console.log("EMAIL_USER:", process.env.EMAIL_USER);

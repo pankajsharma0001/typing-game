@@ -1,26 +1,58 @@
 import { useSession, signOut } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import TypingGame from "../components/TypingGame";
+import { User as UserIcon } from "lucide-react";
+import Link from "next/link";
 
 export default function Dashboard() {
-  const { data: session, status } = useSession();
+  const { data: session, update: updateSession, status } = useSession(); // ✅ use update
   const router = useRouter();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
-  // Force login if not authenticated
+  const [userStats, setUserStats] = useState({
+    highestWPM: 0,
+    highestAccuracy: 0,
+    totalGames: 0,
+  });
+
+  // Close dropdown when clicking outside
   useEffect(() => {
-    if (status === "loading") return; // Wait for session to load
-    if (!session) router.replace("/login"); // Redirect if not logged in
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session) router.replace("/login");
   }, [session, status]);
+
+  // Update local stats whenever session changes
+  useEffect(() => {
+    if (session?.user) {
+      setUserStats({
+        highestWPM: session.user.highestWPM || 0,
+        highestAccuracy: session.user.highestAccuracy || 0,
+        totalGames: session.user.totalGames || 0,
+      });
+    }
+  }, [session]);
 
   if (status === "loading") {
     return <p className="text-center mt-10 text-gray-700">Loading session...</p>;
   }
-
   if (!session) {
     return <p className="text-center mt-10 text-gray-700">Redirecting to login...</p>;
   }
+
+  const profileImage = session.user.image;
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100 p-6">
@@ -29,25 +61,61 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
           Hello, {session.user.name}
         </h1>
-        <div className="flex gap-4">
-          <Link
-            href="/stats"
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+
+        <div className="relative" ref={dropdownRef}>
+          {/* Profile image / icon */}
+          <div
+            className="w-12 h-12 rounded-full cursor-pointer border-2 border-purple-600 overflow-hidden"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            View Stats
-          </Link>
-          <button
-            onClick={() => signOut()}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors"
-          >
-            Logout
-          </button>
+            {profileImage ? (
+              <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                <UserIcon className="w-6 h-6 text-gray-600" />
+              </div>
+            )}
+          </div>
+
+          {/* Dropdown */}
+          {dropdownOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-white shadow-lg rounded-lg z-50">
+              <Link href="/profile">
+                <button className="w-full text-left px-4 py-2 text-purple-700 font-semibold hover:bg-purple-100 transition-colors rounded-t-lg">
+                  Profile
+                </button>
+              </Link>
+              <Link href="/stats">
+                <button className="w-full text-left px-4 py-2 text-green-700 font-semibold hover:bg-green-100 transition-colors">
+                  Status
+                </button>
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="w-full text-left px-4 py-2 text-red-600 font-semibold hover:bg-red-100 transition-colors rounded-b-lg"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Typing Game */}
       <div className="mt-6">
-        <TypingGame />
+        <TypingGame
+          onGameEnd={async () => {
+            // Refresh session after game ends
+            await updateSession();
+
+            // Update local stats immediately
+            setUserStats({
+              highestWPM: session.user.highestWPM || 0,
+              highestAccuracy: session.user.highestAccuracy || 0,
+              totalGames: session.user.totalGames || 0,
+            });
+          }}
+        />
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
+// components/TypingGame.js
 import { useState, useEffect, useRef } from "react";
-import { getSession } from "next-auth/react";
+import { getSession, useSession, signIn } from "next-auth/react";
 import axios from "axios";
 
 export default function TypingGame() {
-  const intervalRef = useRef(null);
   const startTimeRef = useRef(null);
+  const { data: session, update: updateSession } = useSession();
 
   const [difficulty, setDifficulty] = useState("easy");
   const [sentences, setSentences] = useState([]);
@@ -19,7 +20,7 @@ export default function TypingGame() {
   const timerInSeconds =
     timer === "15s" ? 15 : timer === "30s" ? 30 : timer === "1m" ? 60 : Infinity;
 
-  // Fetch sentences whenever difficulty/timer changes
+  // Fetch sentences on difficulty/timer change
   useEffect(() => {
     setTimeLeft(timerInSeconds);
     setCurrentSentenceIndex(0);
@@ -31,26 +32,22 @@ export default function TypingGame() {
       try {
         const res = await axios.get(`/api/sentences?difficulty=${difficulty}`);
         setSentences(res.data);
-
-        if (res.data.length > 0) {
-          setSentence(res.data[0].text);
-        }
+        if (res.data.length > 0) setSentence(res.data[0].text);
       } catch (err) {
         console.error("Failed to fetch sentences", err);
       }
     }
+
     fetchSentences();
   }, [difficulty, timer]);
 
   // Timer countdown
   useEffect(() => {
-    if (!started || finished) return;
+    if (!started || finished || timeLeft === Infinity) return;
     if (timeLeft === 0) {
       finishGame();
       return;
     }
-    if (timeLeft === Infinity) return;
-
     const interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearInterval(interval);
   }, [timeLeft, started, finished]);
@@ -75,65 +72,45 @@ export default function TypingGame() {
   };
 
   const finishGame = async () => {
-    setFinished(true);
+  setFinished(true);
 
+  if (!session) {
+    signIn(); // redirect to login if no session
+    return;
+  }
+
+  const currentSentence = sentences[currentSentenceIndex]?.text || "";
+  const correctChars = [...typedText].filter((c, i) => c === currentSentence[i]).length;
+  const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+  const minutes = Math.max(1, elapsedMs / 1000) / 60;
+  const wpm = Math.round((correctChars / 5) / minutes);
+  const accuracy = currentSentence.length
+    ? Math.round((correctChars / currentSentence.length) * 100)
+    : 0;
+
+  try {
+    await axios.post("/api/games", { wpm, accuracy, score: correctChars, difficulty });
+    alert(`Game finished! WPM: ${wpm}, Accuracy: ${accuracy}%`);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to save results. Make sure you are logged in.");
+  }
+
+  setStarted(false);
+  setFinished(false);
+};
+
+
+  // Auto next sentence when fully typed
+  useEffect(() => {
+    if (!started || finished) return;
     const currentSentence = sentences[currentSentenceIndex]?.text || "";
-
-    // number of correct characters (net)
-    const correctChars = [...typedText].filter(
-      (c, i) => c === currentSentence[i]
-    ).length;
-
-    // elapsed time in seconds
-    const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-    const elapsedSec = Math.max(1, elapsedMs / 1000); // avoid division by zero
-    const minutes = elapsedSec / 60;
-
-    // Net WPM: correct characters => words (5 chars = 1 word)
-    const wpm = minutes > 0 ? Math.round((correctChars / 5) / minutes) : 0;
-
-    // accuracy
-    const accuracy = currentSentence.length
-      ? Math.round((correctChars / currentSentence.length) * 100)
-      : 0;
-
-    try {
-      const session = await getSession();
-      if (!session) {
-        alert("You must be logged in to save your score!");
-        return;
-      }
-
-      await axios.post("/api/games", {
-        score: correctChars,
-        wpm,
-        accuracy,
-        difficulty,
-      });
-
-      alert(`Game finished! WPM: ${wpm}, Accuracy: ${accuracy}%`);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to save results. Make sure you are logged in.");
-    }
-    setStarted(false);
-    setFinished(false);
-  };
-
-  // Automatically go to next sentence when fully typed
-    useEffect(() => {
-    if (!started) return; // only run if game started
-    const currentSentence = sentences[currentSentenceIndex]?.text || "";
-    if (typedText.length >= currentSentence.length && !finished) {
-        handleNextSentence();
-    }
-    }, [typedText, started, finished, currentSentenceIndex, sentences]);
+    if (typedText.length >= currentSentence.length) handleNextSentence();
+  }, [typedText, started, finished, currentSentenceIndex, sentences]);
 
   return (
     <div className="max-w-3xl mx-auto p-6 bg-white rounded-3xl shadow-2xl">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">
-        Typing Game
-      </h2>
+      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Typing Game</h2>
 
       {/* Difficulty Selector */}
       <div className="flex gap-4 mb-4 justify-center items-center">
@@ -177,16 +154,9 @@ export default function TypingGame() {
       {/* Sentence Display */}
       <div className="mb-4 p-4 bg-purple-50 rounded-lg text-gray-400 font-mono text-lg leading-relaxed">
         {(sentences[currentSentenceIndex]?.text || "").split("").map((char, idx) => {
-          let colorClass = "text-gray-400"; // faint default
-          if (idx < typedText.length) {
-            colorClass =
-              typedText[idx] === char ? "text-green-600" : "text-red-600";
-          }
-          return (
-            <span key={idx} className={colorClass}>
-              {char}
-            </span>
-          );
+          let colorClass = "text-gray-400";
+          if (idx < typedText.length) colorClass = typedText[idx] === char ? "text-green-600" : "text-red-600";
+          return <span key={idx} className={colorClass}>{char}</span>;
         })}
       </div>
 
@@ -209,7 +179,6 @@ export default function TypingGame() {
             Start
           </button>
         )}
-
         {started && !finished && (
           <button
             onClick={finishGame}

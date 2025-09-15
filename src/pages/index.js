@@ -16,7 +16,7 @@ export default function Home() {
       // If not logged in, redirect to login page
       router.replace("/login");
     }
-  }, [session, status]);
+  }, [session, status, router]);
 
   return <p>Loading...</p>;
 }

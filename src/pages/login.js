@@ -52,9 +52,9 @@ export default function Login() {
 
         {/* Forgot Password link below Login button */}
         <div className="text-center mb-4">
-          <a href="/forgot-password" className="text-sm text-purple-600 hover:underline">
+          <Link href="/forgot-password" className="text-sm text-purple-600 hover:underline">
             Forgot Password?
-          </a>
+          </Link>
         </div>
 
         <div className="flex items-center mb-4">
@@ -73,7 +73,7 @@ export default function Login() {
 
         <p className="text-center text-gray-600">
           Don’t have an account?{" "}
-          <a href="/register" className="text-purple-600 font-semibold hover:underline">Sign Up</a>
+          <Link href="/register" className="text-purple-600 font-semibold hover:underline">Sign Up</Link>
         </p>
       </div>
     </div>

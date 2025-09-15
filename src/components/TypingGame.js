@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import axios from "axios";
+import { useRouter } from 'next/router';
 
 export default function TypingGame() {
+  const router = useRouter();
   const startTimeRef = useRef(null);
   const containerRef = useRef(null);
   const { data: session } = useSession();
@@ -57,7 +59,7 @@ export default function TypingGame() {
     }
     const interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [timeLeft, started, finished]);
+  }, [timeLeft, started, finished, finishGame]);
 
   // Utility: wrap index
   const wrapIndex = (idx) => {
@@ -75,7 +77,7 @@ export default function TypingGame() {
       sentences[firstIdx]?.text || "",
       sentences[secondIdx]?.text || "",
     ]);
-  }, [windowLineIndex, sentences]);
+  }, [windowLineIndex, sentences, wrapIndex]);
 
   const startGame = () => {
     setStarted(true);
@@ -91,19 +93,33 @@ export default function TypingGame() {
     if (!started || finished || !visibleLines.length) return;
     const currentLine = visibleLines[0];
 
-    // Advance to next line when length matches, regardless of mistakes
     if (typedText.length === currentLine.length) {
-      // Calculate correct characters for this line
-      const correctChars = [...typedText].filter(
-        (char, idx) => char === currentLine[idx]
-      ).length;
-
-      // Store the stats for this line
-      setCompletedLinesStats(prev => [...prev, {
+      // Calculate character stats for this line
+      const lineStats = {
         total: currentLine.length,
-        correct: correctChars
-      }]);
+        correct: 0,
+        incorrect: 0,
+        extra: 0,
+        missed: 0
+      };
 
+      // Count correct, incorrect, and missed characters
+      [...currentLine].forEach((char, idx) => {
+        if (idx < typedText.length) {
+          if (typedText[idx] === char) {
+            lineStats.correct++;
+          } else {
+            lineStats.incorrect++;
+          }
+        } else {
+          lineStats.missed++;
+        }
+      });
+
+      // Count extra characters (typed chars beyond line length)
+      lineStats.extra = Math.max(0, typedText.length - currentLine.length);
+
+      setCompletedLinesStats(prev => [...prev, lineStats]);
       setWindowLineIndex(prev => prev + 1);
       setTypedText("");
     }
@@ -135,37 +151,118 @@ export default function TypingGame() {
       ).length;
     }
 
-    // Calculate time in minutes (minimum 1 second to avoid division by zero)
+    // Calculate time
     const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-    const minutes = Math.max(0.0166667, elapsedMs / 1000 / 60); // Minimum 1 second
+    const elapsedSeconds = Math.round(elapsedMs / 1000);
+    const minutes = Math.max(0.0166667, elapsedMs / 1000 / 60);
 
-    // Calculate WPM (standard: 5 characters = 1 word)
+    // Calculate WPM and accuracy
     const wpm = Math.round((totalCorrectChars / 5) / minutes);
-
-    // Calculate accuracy
     const accuracy = totalChars > 0 
       ? Math.round((totalCorrectChars / totalChars) * 100)
       : 0;
 
+    // Calculate totals including extra and missed
+    let totalStats = {
+      correct: 0,
+      incorrect: 0,
+      extra: 0,
+      missed: 0
+    };
+
+    completedLinesStats.forEach(stat => {
+      totalStats.correct += stat.correct;
+      totalStats.incorrect += stat.incorrect;
+      totalStats.extra += stat.extra;
+      totalStats.missed += stat.missed;
+    });
+
+    // Add current line stats if any
+    if (typedText.length > 0) {
+      [...currentLine].forEach((char, idx) => {
+        if (idx < typedText.length) {
+          if (typedText[idx] === char) {
+            totalStats.correct++;
+          } else {
+            totalStats.incorrect++;
+          }
+        } else {
+          totalStats.missed++;
+        }
+      });
+      totalStats.extra += Math.max(0, typedText.length - currentLine.length);
+    }
+
+    // Calculate WPM history from the start
+    const history = [];
+    const dataInterval = 2;
+    const markInterval = 5;
+
+    for (let i = 0; i <= elapsedSeconds; i += dataInterval) {
+      const timePoint = Math.max(1, i); // Ensure minimum 1 second
+      const partialStats = completedLinesStats.filter((_, index) => {
+        const statTime = (index + 1) * (elapsedSeconds / completedLinesStats.length);
+        return statTime <= timePoint;
+      });
+
+      let partialCorrect = partialStats.reduce((sum, stat) => sum + stat.correct, 0);
+      let partialMinutes = timePoint / 60;
+      let partialWpm = Math.round((partialCorrect / 5) / partialMinutes);
+
+      history.push({
+        time: i,
+        wpm: partialWpm,
+        isMark: i % markInterval === 0
+      });
+    }
+
+    // Add final data point
+    history.push({
+      time: elapsedSeconds,
+      wpm: wpm,
+      isMark: true // Always mark the final point
+    });
+
+    // Prepare results data
+    const results = {
+      wpm,
+      accuracy,
+      time: elapsedSeconds,
+      score: totalStats.correct,
+      history,
+      dataInterval,
+      markInterval,
+      characterStats: totalStats
+    };
+
     try {
+      // Save results to database
       await axios.post("/api/games", { 
         wpm, 
         accuracy, 
         score: totalCorrectChars, 
         difficulty 
       });
-      alert(`Game finished! WPM: ${wpm}, Accuracy: ${accuracy}%`);
+
+      // Reset game state
+      setStarted(false);
+      setFinished(false);
+      setTypedText("");
+      setWindowLineIndex(0);
+      setCompletedLinesStats([]);
+
+      // Navigate to results page with data
+      router.push({
+        pathname: '/result',
+        query: { 
+          results: JSON.stringify(results)
+        }
+      });
+
     } catch (err) {
       console.error(err);
       alert("Failed to save results.");
     }
-
-    // Reset all game state
-    setStarted(false);
-    setFinished(false);
-    setTypedText("");
-    setWindowLineIndex(0);
-    setCompletedLinesStats([]); // Reset stats
   };
 
   return (

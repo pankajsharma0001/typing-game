@@ -51,7 +51,7 @@ export default function ResetPassword() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [password, confirmPassword, token, id]);
+  }, [password, confirmPassword, token, id, handleReset]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-4">

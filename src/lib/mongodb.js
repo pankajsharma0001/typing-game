@@ -1,26 +1,28 @@
-import { MongoClient } from "mongodb";
+// lib/mongodb.js
+import mongoose from "mongoose";
 
-const uri = process.env.MONGODB_URI; // put your MongoDB URI in .env.local
-const options = {};
+const uri =
+  process.env.NODE_ENV === "development"
+    ? process.env.MONGODB_URI_LOCAL
+    : process.env.MONGODB_URI;
 
-let client;
-let clientPromise;
-
-if (!process.env.MONGODB_URI) {
+if (!uri) {
   throw new Error("Please add your MongoDB URI to .env.local");
 }
 
-if (process.env.NODE_ENV === "development") {
-  // In development, use a global variable to preserve client across hot reloads
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
-  }
-  clientPromise = global._mongoClientPromise;
-} else {
-  // In production, create a new client
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
-}
+let isConnected = null; // track connection state
 
-export default clientPromise;
+export async function connectMongo() {
+  if (isConnected) return;
+
+  try {
+    const conn = await mongoose.connect(uri, {
+      bufferCommands: false,
+    });
+    isConnected = conn.connections[0].readyState === 1;
+    console.log("✅ MongoDB connected:", uri.includes("127.0.0.1") ? "Local" : "Atlas");
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    throw err;
+  }
+}

@@ -32,7 +32,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (status === "loading") return;
     if (!session) router.replace("/login");
-  }, [session, status]);
+  }, [session, status, router]);
 
   // Update local stats whenever session changes
   useEffect(() => {

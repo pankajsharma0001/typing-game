@@ -129,12 +129,12 @@ export default function Register() {
 
         <p className="text-center text-gray-600">
           Already have an account?{" "}
-          <a
+          <Link
             href="/login"
             className="text-purple-600 font-semibold hover:underline"
           >
             Login
-          </a>
+          </Link>
         </p>
       </div>
     </div>

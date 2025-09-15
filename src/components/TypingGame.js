@@ -59,7 +59,7 @@ export default function TypingGame() {
     }
     const interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [timeLeft, started, finished, finishGame]);
+  }, [timeLeft, started, finished]);
 
   // Utility: wrap index
   const wrapIndex = (idx) => {
@@ -77,7 +77,7 @@ export default function TypingGame() {
       sentences[firstIdx]?.text || "",
       sentences[secondIdx]?.text || "",
     ]);
-  }, [windowLineIndex, sentences, wrapIndex]);
+  }, [windowLineIndex, sentences]);
 
   const startGame = () => {
     setStarted(true);

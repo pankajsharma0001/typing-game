@@ -1,40 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# ⌨️ Typing Game Web App
 
-## Getting Started
+A full-stack typing game built with **Next.js, MongoDB, and NextAuth**.  
+Users can sign up, play typing tests (timed or unlimited), and view stats like WPM and accuracy.  
+Includes password reset via email (Nodemailer + Gmail).
 
-First, run the development server:
+---
 
+## 🚀 Features
+- 🔑 Authentication with **NextAuth**
+- 📊 Stores game results in **MongoDB**
+- ⏱️ Timed & unlimited typing modes
+- 📈 Tracks WPM & accuracy in real time
+- 🔐 Password reset with email verification
+- ☁️ Fully deployable on **Vercel**
+
+---
+
+## 🛠️ Setup & Installation
+
+### 1. Clone the repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/your-username/typing-game.git
+cd typing-game
 ```
+### 2. Add environment variables
+  Create .env.local and put the following code
+```bash
+# Database
+MONGODB_URI=mongodb://127.0.0.1:27017/typinggame
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+# NextAuth
+NEXTAUTH_SECRET=your-secret-key
+NEXTAUTH_URL=http://localhost:3000
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+# Email (Nodemailer + Gmail)
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+#Google (To send reset mail)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+1. MONGODB_URI  
+   install [MongoDB](https://www.mongodb.com/try/download/community) and use:
+     ```bash
+     mongodb://127.0.0.1:27017/typinggame
+     ```
+2. NextAuth  
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+    NEXTAUTH_SECRET → Generate a strong random string (for example run openssl rand -base64 32 in your terminal).  
+    NEXTAUTH_URL → http://localhost:3000 (by default)  
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Email (Nodemailer + Gmail)  
+    EMAIL_USER → Your Gmail address.  
+    EMAIL_PASS → An App Password (⚠️ not your Gmail password).  
+      -Go to [Google Account Security](https://myaccount.google.com/security)  
+      -Enable 2-Step Verification.  
+      -Generate an App Password and use it here.  
 
-## Learn More
+4. Google OAuth  
+     -Go to [Google Cloud Console](https://console.cloud.google.com/).  
+     -Create a new project.  
+     -Navigate to APIs & Services → Credentials → Create Credentials → OAuth Client ID.  
+     -Choose Web Application.  
+     -Add Authorized Redirect URIs:  
+       ```bash
+         http://localhost:3000/api/auth/callback/google  
+        ```  
+     -Copy the Client ID → GOOGLE_CLIENT_ID.  
+     -Copy the Client Secret → GOOGLE_CLIENT_SECRET.  
+   
+### 3. Install dependencies  
+  ```bash
+    npm install next react react-dom next-auth axios mongoose mongodb nodemailer lucide-react recharts
+    npm install -D eslint prettier
+   ```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+## 📝 License  
+MIT License. Free to use and modify.

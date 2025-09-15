@@ -6,7 +6,7 @@ import { User as UserIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function Dashboard() {
-  const { data: session, update: updateSession, status } = useSession(); // ✅ use update
+  const { data: session, update: updateSession, status } = useSession();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -16,6 +16,12 @@ export default function Dashboard() {
     highestAccuracy: 0,
     totalGames: 0,
   });
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session) router.replace("/login");
+  }, [status, session, router]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -27,12 +33,6 @@ export default function Dashboard() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  // Redirect if not logged in
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session) router.replace("/login");
-  }, [session, status, router]);
 
   // Update local stats whenever session changes
   useEffect(() => {
@@ -48,6 +48,7 @@ export default function Dashboard() {
   if (status === "loading") {
     return <p className="text-center mt-10 text-gray-700">Loading session...</p>;
   }
+
   if (!session) {
     return <p className="text-center mt-10 text-gray-700">Redirecting to login...</p>;
   }
@@ -63,7 +64,6 @@ export default function Dashboard() {
         </h1>
 
         <div className="relative" ref={dropdownRef}>
-          {/* Profile image / icon */}
           <div
             className="w-12 h-12 rounded-full cursor-pointer border-2 border-purple-600 overflow-hidden"
             onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -77,7 +77,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Dropdown */}
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-40 bg-white shadow-lg rounded-lg z-50">
               <Link href="/profile">
@@ -105,10 +104,7 @@ export default function Dashboard() {
       <div className="mt-6">
         <TypingGame
           onGameEnd={async () => {
-            // Refresh session after game ends
             await updateSession();
-
-            // Update local stats immediately
             setUserStats({
               highestWPM: session.user.highestWPM || 0,
               highestAccuracy: session.user.highestAccuracy || 0,

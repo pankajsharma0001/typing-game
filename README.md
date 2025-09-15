@@ -65,8 +65,8 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
      -Choose Web Application.  
      -Add Authorized Redirect URIs:  
        ```bash
-         http://localhost:3000/api/auth/callback/google
-        ```
+         http://localhost:3000/api/auth/callback/google  
+        ```  
      -Copy the Client ID → GOOGLE_CLIENT_ID.  
      -Copy the Client Secret → GOOGLE_CLIENT_SECRET.  
    

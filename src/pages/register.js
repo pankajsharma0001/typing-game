@@ -4,6 +4,8 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 
 export default function Register() {
+  // Add loading state
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -21,24 +23,64 @@ export default function Register() {
 
   const checkRule = (regex) => regex.test(password);
 
-  // Password generator
+  // Updated password generator that ensures all rules are met
   const generatePassword = () => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const special = "!@#$%^&*()_+";
+
+    // Ensure at least one character from each category
     let generated = "";
-    for (let i = 0; i < 12; i++) {
-      generated += chars.charAt(Math.floor(Math.random() * chars.length));
+    generated += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+    generated += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+    generated += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    generated += special.charAt(Math.floor(Math.random() * special.length));
+
+    // Fill remaining length with random characters from all categories
+    const allChars = uppercase + lowercase + numbers + special;
+    for (let i = generated.length; i < 12; i++) {
+      generated += allChars.charAt(Math.floor(Math.random() * allChars.length));
     }
+
+    // Shuffle the password
+    generated = generated
+      .split("")
+      .sort(() => Math.random() - 0.5)
+      .join("");
+
     setPassword(generated);
   };
 
+  // Add this validation function after the rules array
+  const isGoogleEmail = (email) => {
+    return email.endsWith('@google.com');
+  };
+
+  // Update the handleRegister function
   const handleRegister = async () => {
     setError("");
+    setIsLoading(true);
 
-    // Validate all rules before register
+    // Validate email format
+    if (!email || !email.includes('@')) {
+      setError("Please enter a valid email address.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if it's a Google email
+    if (!isGoogleEmail(email)) {
+      setError("Only @google.com email addresses are allowed.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate all password rules
     const allPassed = rules.every((rule) => checkRule(rule.regex));
     if (!allPassed) {
       setError("Password does not meet all requirements.");
+      setIsLoading(false);
       return;
     }
 
@@ -61,6 +103,7 @@ export default function Register() {
       if (login?.ok) router.push("/dashboard");
     } catch (error) {
       setError(error.message);
+      setIsLoading(false);
     }
   };
 
@@ -83,8 +126,13 @@ export default function Register() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800"
+          className={`w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800 ${
+            email && !isGoogleEmail(email) ? 'border-red-500' : ''
+          }`}
         />
+        {email && !isGoogleEmail(email) && (
+          <p className="text-red-500 text-sm mb-4">Only @google.com email addresses are allowed</p>
+        )}
 
         <input
           type="text"
@@ -121,9 +169,19 @@ export default function Register() {
 
         <button
           onClick={handleRegister}
-          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 shadow-md"
+          disabled={isLoading}
+          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 shadow-md disabled:bg-purple-400 relative"
         >
-          Register
+          {isLoading ? (
+            <>
+              <span className="opacity-0">Register</span>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            </>
+          ) : (
+            "Register"
+          )}
         </button>
 
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}

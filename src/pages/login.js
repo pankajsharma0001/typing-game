@@ -7,16 +7,28 @@ export default function Login() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleLogin = async () => {
+    setIsLoading(true);
     const res = await signIn("credentials", {
       redirect: false,
       username,
       password,
     });
 
-    if (res?.ok) router.push("/dashboard");
-    else alert("Invalid username or password");
+    if (res?.ok) {
+      router.push("/dashboard");
+    } else {
+      setIsLoading(false);
+      alert("Invalid username or password");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    await signIn("google", { callbackUrl: "/dashboard" });
   };
 
   const handleKeyDown = (e) => {
@@ -33,7 +45,8 @@ export default function Login() {
           placeholder="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800"
+          disabled={isLoading}
+          className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800 disabled:bg-gray-100"
         />
         <input
           type="password"
@@ -41,14 +54,25 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800"
+          disabled={isLoading}
+          className="w-full px-4 py-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-700 text-gray-800 disabled:bg-gray-100"
         />
 
         <button
           onClick={handleLogin}
-          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-2 shadow-md"
+          disabled={isLoading || isGoogleLoading}
+          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-2 shadow-md disabled:bg-purple-400 relative"
         >
-          Login
+          {isLoading ? (
+            <>
+              <span className="opacity-0">Login</span>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            </>
+          ) : (
+            "Login"
+          )}
         </button>
 
         {/* Forgot Password link below Login button */}
@@ -65,11 +89,27 @@ export default function Login() {
         </div>
 
         <button
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-          className="flex items-center justify-center w-full border border-gray-500 px-4 py-3 rounded-lg hover:bg-gray-300 transition-colors mb-4 text-gray-700 font-semibold"
+          onClick={handleGoogleLogin}
+          disabled={isLoading || isGoogleLoading}
+          className="flex items-center justify-center w-full border border-gray-500 px-4 py-3 rounded-lg hover:bg-gray-300 transition-colors mb-4 text-gray-700 font-semibold disabled:bg-gray-100 disabled:border-gray-300 disabled:text-gray-500 relative"
         >
-          <img src="/google-logo.svg" alt="Google Logo" className="w-6 h-6 mr-3" />
-          Login with Google
+          {isGoogleLoading ? (
+            <>
+              <span className="opacity-0">Login with Google</span>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <img src="/google-logo.svg" alt="Google Logo" className="w-6 h-6 mr-3" />
+              Login with Google
+            </>
+          )}
         </button>
 
         <p className="text-center text-gray-600">

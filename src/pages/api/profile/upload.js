@@ -22,6 +22,10 @@ router.use(async (req, res, next) => {
 router.use(upload.single("file"));
 
 router.post(async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method not allowed" });
+  }
+
   try {
     await clientPromise;
     if (mongoose.connection.readyState !== 1) {
@@ -35,16 +39,17 @@ router.post(async (req, res) => {
 
     const imageUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
+    // Update user in database
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    user.image = imageUrl;
+    user.image = imageUrl; // Store the new image URL
     await user.save();
 
-    res.status(200).json({ message: "Upload successful", image: user.image });
+    res.status(200).json({ message: "Profile image updated", imageUrl });
   } catch (error) {
     console.error("Upload error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Upload failed" });
   }
 });
 

@@ -54,7 +54,7 @@ export default function Register() {
 
   // Add this validation function after the rules array
   const isGoogleEmail = (email) => {
-    return email.endsWith('@google.com');
+    return email.endsWith('@gmail.com');
   };
 
   // Update the handleRegister function
@@ -71,7 +71,7 @@ export default function Register() {
 
     // Check if it's a Google email
     if (!isGoogleEmail(email)) {
-      setError("Only @google.com email addresses are allowed.");
+      setError("Only @gmail.com email addresses are allowed.");
       setIsLoading(false);
       return;
     }

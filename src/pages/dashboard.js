@@ -6,7 +6,7 @@ import { User as UserIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function Dashboard() {
-  const { data: session, update: updateSession, status } = useSession(); // ✅ use update
+  const { data: session, update: updateSession, status } = useSession();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -17,7 +17,6 @@ export default function Dashboard() {
     totalGames: 0,
   });
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -28,13 +27,11 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [router]);
 
-  // Redirect if not logged in
   useEffect(() => {
     if (status === "loading") return;
     if (!session) router.replace("/login");
   }, [session, status, router]);
 
-  // Update local stats whenever session changes
   useEffect(() => {
     if (session?.user) {
       setUserStats({
@@ -58,12 +55,10 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100 p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
-          Hello, {session.user.name}
-        </h1>
+        {/* Spacer pushes avatar to the right */}
+        <div className="flex-1" />
 
         <div className="relative" ref={dropdownRef}>
-          {/* Profile image / icon */}
           <div
             className="w-12 h-12 rounded-full cursor-pointer border-2 border-purple-600 overflow-hidden"
             onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -77,7 +72,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Dropdown */}
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-40 bg-white shadow-lg rounded-lg z-50">
               <Link href="/profile">
@@ -101,21 +95,26 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Typing Game */}
-      <div className="mt-6">
-        <TypingGame
-          onGameEnd={async () => {
-            // Refresh session after game ends
-            await updateSession();
+      {/* Welcome Message */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            Welcome, {session?.user?.name || session?.user?.username}!
+          </h1>
 
-            // Update local stats immediately
-            setUserStats({
-              highestWPM: session.user.highestWPM || 0,
-              highestAccuracy: session.user.highestAccuracy || 0,
-              totalGames: session.user.totalGames || 0,
-            });
-          }}
-        />
+          <div className="mt-6">
+            <TypingGame
+              onGameEnd={async () => {
+                await updateSession();
+                setUserStats({
+                  highestWPM: session.user.highestWPM || 0,
+                  highestAccuracy: session.user.highestAccuracy || 0,
+                  totalGames: session.user.totalGames || 0,
+                });
+              }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

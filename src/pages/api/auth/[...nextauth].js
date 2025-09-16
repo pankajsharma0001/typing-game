@@ -6,7 +6,7 @@ import clientPromise from "../../../lib/mongodb";
 import User from "../../../models/User";
 import bcrypt from "bcryptjs";
 
-// MongoDB connection
+// Connect to MongoDB
 async function connectMongo() {
   await clientPromise;
   if (mongoose.connection.readyState !== 1) {
@@ -28,49 +28,49 @@ export const authOptions = {
       },
       async authorize(credentials) {
         await connectMongo();
-        const user = await User.findOne({ username: credentials.username });
-        if (user && bcrypt.compareSync(credentials.password, user.password)) {
-          return {
-            id: user._id.toString(),
-            name: user.username,
-            email: user.email,
-          };
-        }
-        return null;
+        const user = await User.findOne({ username: credentials.username }).lean();
+        if (!user) return null;
+
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isValid) return null;
+
+        // JWT-safe: no base64 images
+        return {
+          id: user._id.toString(),
+          username: user.username,
+          name: user.name,
+          email: user.email,
+          image: user.image ? "placeholder" : null, // small placeholder
+        };
       },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      if (user) {
-        token.sub = user.id || user._id?.toString();
-      }
+      if (user) token.sub = user.id;
 
-      // Google login
       if (account?.provider === "google" && profile) {
         await connectMongo();
         let existingUser = await User.findOne({ email: profile.email });
 
         if (!existingUser) {
-          // Log the profile data for debugging
-          console.log("Creating new user from Google profile:", {
-            email: profile.email,
-            picture: profile.picture,
-          });
-
           existingUser = await User.create({
             username: profile.name.replace(/\s+/g, "").toLowerCase(),
             name: profile.name,
             email: profile.email,
-            image: profile.picture,
-            googleId: profile.sub,
+            image: profile.picture, // URL only
+            googleId: profile.id,
           });
+        } else if (profile.picture && profile.picture !== existingUser.image) {
+          existingUser.image = profile.picture;
+          await existingUser.save();
         }
 
-        // Always update the token with the latest image
-        token.picture = profile.picture || existingUser.image;
+        token.sub = existingUser._id.toString();
+        token.picture = existingUser.image;
       }
+
       return token;
     },
 
@@ -79,17 +79,20 @@ export const authOptions = {
         await connectMongo();
         const user = await User.findById(token.sub).lean();
         if (user) {
-          // Log the user data for debugging
-          console.log("Session user data from DB:", {
-            id: user._id,
-            image: user.image,
-          });
-
+          // Use DB image directly, do not store base64 in JWT
           session.user = {
-            ...session.user,
             id: user._id.toString(),
             username: user.username,
-            image: user.image || token.picture || null,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+            bio: user.bio || "",
+            dateOfBirth: user.dateOfBirth || null,
+            location: user.location || "",
+            website: user.website || "",
+            twitter: user.twitter || "",
+            github: user.github || "",
+            createdAt: user.createdAt,
           };
         }
       }
@@ -97,13 +100,9 @@ export const authOptions = {
     },
   },
 
-  session: {
-    strategy: "jwt",
-  },
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
   secret: process.env.NEXTAUTH_SECRET,
-  pages: {
-    signIn: "/login",
-  },
 };
 
 export default NextAuth(authOptions);

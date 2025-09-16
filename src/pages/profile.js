@@ -1,7 +1,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useState, useRef, useEffect } from "react";
-import { User as UserIcon, Edit as EditIcon } from "lucide-react";
+import { Edit as EditIcon } from "lucide-react";
 import EditProfileModal from "../components/EditProfileModal";
 
 export default function Profile() {
@@ -13,27 +13,13 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    if (session) {
-      console.log("Session user data:", session.user);
-    }
-  }, [session]);
-
-  // Enhanced debugging useEffect
-  useEffect(() => {
-    if (session?.user) {
-      console.log("Full session user data:", {
-        id: session.user.id,
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-        provider: session.user.provider,
-      });
-    }
+    if (session) console.log("Session user data:", session.user);
   }, [session]);
 
   if (!session)
     return <p className="text-center mt-10 text-gray-300">Loading...</p>;
 
+  // Upload profile image
   const handleUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -50,11 +36,12 @@ export default function Profile() {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
 
       if (res.ok) {
         setMessage("✅ Profile image updated!");
-        if (updateSession) await updateSession();
+        if (updateSession) await updateSession(); // refresh session from DB
       } else {
         setMessage(`❌ ${data.message}`);
       }
@@ -66,6 +53,7 @@ export default function Profile() {
     }
   };
 
+  // Save profile edits
   const handleSaveProfile = async (formData) => {
     setLoading(true);
     setMessage("");
@@ -73,20 +61,15 @@ export default function Profile() {
     try {
       const res = await fetch("/api/profile/update", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: session.user.id,
-          ...formData,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.user.id, ...formData }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
         setMessage("✅ Profile updated successfully!");
-        if (updateSession) await updateSession();
+        if (updateSession) await updateSession(); // refresh session from DB
         setIsEditing(false);
       } else {
         setMessage(`❌ ${data.message}`);
@@ -99,14 +82,13 @@ export default function Profile() {
     }
   };
 
-  // Add image load error handling
+  // Fallback for broken images
   const handleImageError = (e) => {
-    console.error("Image load error. Image URL was:", session?.user?.image);
+    console.error("Image load error. URL:", session?.user?.image);
     e.target.src = "/default-avatar.png";
   };
 
-  // Update the profile image section
-  const profileImage = session?.user?.image || "/default-avatar.png";
+  const profileImage = session.user.image || "/default-avatar.png";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 p-6">
@@ -137,7 +119,7 @@ export default function Profile() {
             className="w-24 h-24 rounded-full mx-auto cursor-pointer border border-gray-600"
             onClick={() => fileInputRef.current.click()}
             onError={handleImageError}
-            referrerPolicy="no-referrer" // Add this for Google hosted images
+            referrerPolicy="no-referrer"
           />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full">
@@ -162,26 +144,16 @@ export default function Profile() {
             </p>
           </div>
 
-          <p>
-            <strong>Display Name:</strong> {session.user.name || "Not set"}
-          </p>
-          <p>
-            <strong>Email:</strong> {session.user.email}
-          </p>
-          <p>
-            <strong>Bio:</strong> {session.user.bio || "No bio added yet"}
-          </p>
-          <p>
-            <strong>Date of Birth:</strong>{" "}
+          <p><strong>Display Name:</strong> {session.user.name || "Not set"}</p>
+          <p><strong>Email:</strong> {session.user.email}</p>
+          <p><strong>Bio:</strong> {session.user.bio || "No bio added yet"}</p>
+          <p><strong>Date of Birth:</strong>{" "}
             {session.user.dateOfBirth
               ? new Date(session.user.dateOfBirth).toLocaleDateString()
               : "Not set"}
           </p>
-          <p>
-            <strong>Location:</strong> {session.user.location || "Not set"}
-          </p>
-          <p>
-            <strong>Website:</strong>{" "}
+          <p><strong>Location:</strong> {session.user.location || "Not set"}</p>
+          <p><strong>Website:</strong>{" "}
             {session.user.website ? (
               <a
                 href={session.user.website}
@@ -191,12 +163,9 @@ export default function Profile() {
               >
                 {session.user.website.replace(/^https?:\/\//, "")}
               </a>
-            ) : (
-              "Not set"
-            )}
+            ) : "Not set"}
           </p>
-          <p>
-            <strong>Twitter:</strong>{" "}
+          <p><strong>Twitter:</strong>{" "}
             {session.user.twitter ? (
               <a
                 href={session.user.twitter}
@@ -206,12 +175,9 @@ export default function Profile() {
               >
                 {session.user.twitter.replace("https://twitter.com/", "@")}
               </a>
-            ) : (
-              "Not set"
-            )}
+            ) : "Not set"}
           </p>
-          <p>
-            <strong>GitHub:</strong>{" "}
+          <p><strong>GitHub:</strong>{" "}
             {session.user.github ? (
               <a
                 href={session.user.github}
@@ -221,13 +187,9 @@ export default function Profile() {
               >
                 {session.user.github.replace("https://github.com/", "")}
               </a>
-            ) : (
-              "Not set"
-            )}
+            ) : "Not set"}
           </p>
-
-          <p>
-            <strong>Created At:</strong>{" "}
+          <p><strong>Created At:</strong>{" "}
             {new Date(session.user.createdAt).toLocaleDateString()}
           </p>
         </div>

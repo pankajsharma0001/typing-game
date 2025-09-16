@@ -17,6 +17,11 @@ export default function Dashboard() {
     totalGames: 0,
   });
 
+  // Add loading states
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingLogout, setIsLoadingLogout] = useState(false);
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -51,6 +56,27 @@ export default function Dashboard() {
 
   const profileImage = session.user.image;
 
+  // Handle profile click
+  const handleProfileClick = async () => {
+    setIsLoadingProfile(true);
+    await router.push("/profile");
+    setIsLoadingProfile(false);
+  };
+
+  // Handle stats click
+  const handleStatsClick = async () => {
+    setIsLoadingStats(true);
+    await router.push("/stats");
+    setIsLoadingStats(false);
+  };
+
+  // Handle logout click
+  const handleLogout = async () => {
+    setIsLoadingLogout(true);
+    await signOut();
+    setIsLoadingLogout(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100 p-6">
       {/* Header */}
@@ -74,21 +100,55 @@ export default function Dashboard() {
 
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-40 bg-white shadow-lg rounded-lg z-50">
-              <Link href="/profile">
-                <button className="w-full text-left px-4 py-2 text-purple-700 font-semibold hover:bg-purple-100 transition-colors rounded-t-lg">
-                  Profile
-                </button>
-              </Link>
-              <Link href="/stats">
-                <button className="w-full text-left px-4 py-2 text-green-700 font-semibold hover:bg-green-100 transition-colors">
-                  Status
-                </button>
-              </Link>
               <button
-                onClick={() => signOut()}
-                className="w-full text-left px-4 py-2 text-red-600 font-semibold hover:bg-red-100 transition-colors rounded-b-lg"
+                onClick={handleProfileClick}
+                disabled={isLoadingProfile}
+                className="w-full text-left px-4 py-2 text-purple-700 font-semibold hover:bg-purple-100 transition-colors rounded-t-lg relative"
               >
-                Logout
+                {isLoadingProfile ? (
+                  <>
+                    <span className="opacity-0">Profile</span>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  </>
+                ) : (
+                  "Profile"
+                )}
+              </button>
+
+              <button
+                onClick={handleStatsClick}
+                disabled={isLoadingStats}
+                className="w-full text-left px-4 py-2 text-green-700 font-semibold hover:bg-green-100 transition-colors relative"
+              >
+                {isLoadingStats ? (
+                  <>
+                    <span className="opacity-0">Stats</span>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  </>
+                ) : (
+                  "Stats"
+                )}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                disabled={isLoadingLogout}
+                className="w-full text-left px-4 py-2 text-red-600 font-semibold hover:bg-red-100 transition-colors rounded-b-lg relative"
+              >
+                {isLoadingLogout ? (
+                  <>
+                    <span className="opacity-0">Logout</span>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  </>
+                ) : (
+                  "Logout"
+                )}
               </button>
             </div>
           )}

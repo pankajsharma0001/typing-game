@@ -19,6 +19,7 @@ export default function Result() {
     time: 0,
     score: 0,
     history: [],
+    characterStats: {},
     consistency: 0
   });
 
@@ -35,19 +36,44 @@ export default function Result() {
     if (query.results) {
       const resultObj = JSON.parse(query.results);
       
-      // Don't filter out zero values, but ensure history starts from 0
-      let fullHistory = resultObj.history;
+      // Ensure history starts from 0 and has all points
+      let fullHistory = resultObj.history || [];
+      
+      // Add 0 WPM point at start if not present
       if (fullHistory.length > 0 && fullHistory[0].time > 0) {
-        fullHistory = [
-          { time: 0, wpm: 0, isMark: true },
-          ...fullHistory
-        ];
+        fullHistory = [{ time: 0, wpm: 0, isMark: true }, ...fullHistory];
       }
-      
-      // Calculate consistency only from non-zero values
-      const nonZeroWpm = fullHistory.filter(h => h.wpm > 0).map(h => h.wpm);
+
+      // Fill in gaps between points (every 2 seconds)
+      const filledHistory = [];
+      for (let i = 0; i < fullHistory.length - 1; i++) {
+        filledHistory.push(fullHistory[i]);
+        const current = fullHistory[i];
+        const next = fullHistory[i + 1];
+        const gap = next.time - current.time;
+        
+        if (gap > 2) {
+          // Interpolate points between gaps
+          for (let t = current.time + 2; t < next.time; t += 2) {
+            const progress = (t - current.time) / gap;
+            const interpolatedWpm = Math.round(
+              current.wpm + (next.wpm - current.wpm) * progress
+            );
+            filledHistory.push({
+              time: t,
+              wpm: interpolatedWpm,
+              isMark: t % 5 === 0
+            });
+          }
+        }
+      }
+      if (fullHistory.length > 0) {
+        filledHistory.push(fullHistory[fullHistory.length - 1]);
+      }
+
+      // Calculate consistency
+      const nonZeroWpm = filledHistory.filter(h => h.wpm > 0).map(h => h.wpm);
       let consistency = 0;
-      
       if (nonZeroWpm.length > 0) {
         const avgWpm = nonZeroWpm.reduce((a, b) => a + b, 0) / nonZeroWpm.length;
         const variance = nonZeroWpm.reduce((a, b) => a + Math.pow(b - avgWpm, 2), 0) / nonZeroWpm.length;
@@ -56,7 +82,7 @@ export default function Result() {
 
       setResults({
         ...resultObj,
-        history: fullHistory,
+        history: filledHistory,
         consistency
       });
     }
@@ -80,36 +106,64 @@ export default function Result() {
         {/* Graph */}
         <div className="h-[300px] mb-8">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={results.history}>
+            <LineChart 
+              data={results.history}
+              margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis 
-                dataKey="time" 
+              <XAxis
+                dataKey="time"
+                type="number"
                 stroke="#666"
                 tickFormatter={(value) => `${value}s`}
-                domain={[0, 'dataMax']}  // Force start from 0
-                allowDataOverflow={true}
+                domain={[0, 'dataMax']}
+                allowDecimals={false}
+                ticks={(() => {
+                  const interval = results.time <= 30 ? 1 : // 1s interval for ≤30s
+                                  results.time <= 60 ? 2 : // 2s interval for ≤60s
+                                  results.time <= 120 ? 5 : // 5s interval for ≤120s
+                                  10; // 10s interval for >120s
+                  return Array.from(
+                    { length: Math.ceil(results.time / interval) + 1 },
+                    (_, i) => i * interval
+                  );
+                })()}
               />
-              <YAxis 
+              <YAxis
                 stroke="#666"
-                domain={[0, 'dataMax + 10']}
-                allowDataOverflow={true}
+                domain={[0, Math.max(100, Math.ceil(Math.max(...results.history.map(h => h.wpm)) / 10) * 10)]}
+                allowDecimals={false}
+                ticks={Array.from(
+                  { length: 11 },
+                  (_, i) => i * Math.ceil(Math.max(...results.history.map(h => h.wpm)) / 10)
+                )}
               />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#222', 
-                  border: 'none',
-                  borderRadius: '4px'
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#222",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "8px"
                 }}
-                formatter={(value) => [`${value} wpm`, 'Speed']}
-                isAnimationActive={false}  // Disable animation for more accurate readings
+                formatter={(value) => [`${value} wpm`, "Speed"]}
+                isAnimationActive={false}
               />
-              <Line 
+              <Line
                 type="monotone"
                 dataKey="wpm"
                 stroke="#FFD700"
-                dot={false}
+                dot={(props) => {
+                  const { cx, cy, payload } = props;
+                  const interval = results.time <= 30 ? 5 : // Mark every 5s for ≤30s
+                                  results.time <= 60 ? 10 : // Mark every 10s for ≤60s
+                                  results.time <= 120 ? 15 : // Mark every 15s for ≤120s
+                                  30; // Mark every 30s for >120s
+                  return payload.time % interval === 0 ? (
+                    <circle cx={cx} cy={cy} r={2} fill="#FFD700" />
+                  ) : null;
+                }}
                 strokeWidth={2}
-                isAnimationActive={false}  // Disable animation for more accurate readings
+                isAnimationActive={false}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -119,7 +173,7 @@ export default function Result() {
         <div className="grid grid-cols-4 gap-4 text-center font-mono">
           <div>
             <div className="text-gray-500">test type</div>
-            <div className="text-yellow-500">time {results.time}</div>
+            <div className="text-yellow-500">time {results.time}s</div>
             <div className="text-yellow-500">english</div>
           </div>
           <div>
@@ -128,7 +182,7 @@ export default function Result() {
           </div>
           <div>
             <div className="text-gray-500">characters</div>
-            <div 
+            <div
               className="text-yellow-500 cursor-help"
               title={`correct: ${getCharacterStats().correct}
 incorrect: ${getCharacterStats().incorrect}

@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingLogout, setIsLoadingLogout] = useState(false);
 
-  // Dropdown click outside
+  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -26,19 +26,19 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Redirect if no session
+  // Redirect if not logged in
   useEffect(() => {
     if (status === "loading") return;
     if (!session) router.replace("/login");
   }, [session, status, router]);
 
-  // Floating particles background
+  // Floating particle background
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
 
     const particles = Array.from({ length: 60 }).map(() => ({
       x: Math.random() * width,
@@ -51,9 +51,8 @@ export default function Dashboard() {
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Draw connections
-      particles.forEach(p1 => {
-        particles.forEach(p2 => {
+      particles.forEach((p1) => {
+        particles.forEach((p2) => {
           const dx = p1.x - p2.x;
           const dy = p1.y - p2.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -68,8 +67,7 @@ export default function Dashboard() {
         });
       });
 
-      // Draw particles
-      particles.forEach(p => {
+      particles.forEach((p) => {
         ctx.fillStyle = "rgba(255, 182, 193, 0.8)";
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
@@ -127,22 +125,31 @@ export default function Dashboard() {
       <canvas ref={canvasRef} className="absolute inset-0 z-0"></canvas>
 
       {/* Profile Dropdown */}
-      <div className="absolute top-6 right-6 z-10" ref={dropdownRef}>
-        <div
-          className="w-12 h-12 rounded-full cursor-pointer border-2 border-white overflow-hidden shadow-lg hover:scale-105 transition-transform"
+      <div
+        className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20"
+        ref={dropdownRef}
+      >
+        <button
+          type="button"
+          aria-label="Profile menu"
+          className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-white overflow-hidden shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400 hover:scale-105 transition-transform"
           onClick={() => setDropdownOpen(!dropdownOpen)}
         >
           {profileImage ? (
-            <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+            <img
+              src={profileImage}
+              alt="Profile"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-700">
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-700">
               <UserIcon className="w-6 h-6 text-gray-300" />
             </div>
           )}
-        </div>
+        </button>
 
         {dropdownOpen && (
-          <div className="absolute right-0 mt-2 w-40 bg-gray-800 shadow-2xl rounded-lg z-50 animate-slideDown">
+          <div className="absolute right-0 mt-2 w-36 sm:w-40 bg-gray-800 shadow-2xl rounded-lg animate-slideDown">
             {/* Profile */}
             <button
               onClick={handleProfileClick}
@@ -192,13 +199,13 @@ export default function Dashboard() {
       </div>
 
       {/* Dashboard Content */}
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-10">
-        <h1 className="text-3xl font-bold text-center mb-8">
+      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-10">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-6 sm:mb-8">
           Welcome, {session?.user?.name || session?.user?.username}!
         </h1>
 
         {/* Typing Game */}
-        <div className="bg-gray-800 rounded-2xl shadow-xl p-6">
+        <div className="bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 md:p-8">
           <TypingGame
             onGameEnd={async () => {
               await updateSession();
@@ -209,8 +216,14 @@ export default function Dashboard() {
 
       <style jsx>{`
         @keyframes slideDown {
-          0% { transform: translateY(-10px); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
+          0% {
+            transform: translateY(-10px);
+            opacity: 0;
+          }
+          100% {
+            transform: translateY(0);
+            opacity: 1;
+          }
         }
         .animate-slideDown {
           animation: slideDown 0.3s ease-out;

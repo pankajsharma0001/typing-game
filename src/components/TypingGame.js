@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import axios from "axios";
-import { useRouter } from 'next/router';
+import { useRouter } from "next/router";
 
 export default function TypingGame() {
   const router = useRouter();
   const startTimeRef = useRef(null);
   const containerRef = useRef(null);
+  const inputRef = useRef(null);
   const { data: session } = useSession();
 
   const [difficulty, setDifficulty] = useState("easy");
@@ -17,10 +18,8 @@ export default function TypingGame() {
   const [finished, setFinished] = useState(false);
   const [typedText, setTypedText] = useState("");
 
-  const [windowLineIndex, setWindowLineIndex] = useState(0); // Index of first visible line
+  const [windowLineIndex, setWindowLineIndex] = useState(0);
   const [visibleLines, setVisibleLines] = useState([]);
-
-  // Add this state to track correct characters for each completed line
   const [completedLinesStats, setCompletedLinesStats] = useState([]);
 
   const timerInSeconds =
@@ -34,12 +33,11 @@ export default function TypingGame() {
     setTypedText("");
     setWindowLineIndex(0);
     setVisibleLines([]);
+    setCompletedLinesStats([]);
 
     async function fetchSentences() {
       try {
-        const res = await axios.get(
-          `/api/sentences?difficulty=${difficulty}&count=20`
-        );
+        const res = await axios.get(`/api/sentences?difficulty=${difficulty}&count=20`);
         setSentences(res.data.map((s) => ({ text: s.text || "" })));
       } catch (err) {
         console.error(err);
@@ -61,22 +59,13 @@ export default function TypingGame() {
     return () => clearInterval(interval);
   }, [timeLeft, started, finished]);
 
-  // Utility: wrap index
-  const wrapIndex = (idx) => {
-    if (!sentences.length) return 0;
-    return idx % sentences.length;
-  };
+  const wrapIndex = (idx) => (sentences.length ? idx % sentences.length : 0);
 
-  // Update visible lines
   useEffect(() => {
     if (!sentences.length) return;
     const firstIdx = wrapIndex(windowLineIndex);
     const secondIdx = wrapIndex(windowLineIndex + 1);
-
-    setVisibleLines([
-      sentences[firstIdx]?.text || "",
-      sentences[secondIdx]?.text || "",
-    ]);
+    setVisibleLines([sentences[firstIdx]?.text || "", sentences[secondIdx]?.text || ""]);
   }, [windowLineIndex, sentences]);
 
   const startGame = () => {
@@ -84,181 +73,100 @@ export default function TypingGame() {
     setFinished(false);
     setTypedText("");
     setTimeLeft(timerInSeconds);
-    setCompletedLinesStats([]); // Reset stats
+    setCompletedLinesStats([]);
     startTimeRef.current = Date.now();
+    // Add a small delay to ensure the input is rendered
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
   };
 
-  // Advance line when fully typed
   useEffect(() => {
     if (!started || finished || !visibleLines.length) return;
     const currentLine = visibleLines[0];
-
     if (typedText.length === currentLine.length) {
-      // Calculate character stats for this line
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000);
+
       const lineStats = {
         total: currentLine.length,
         correct: 0,
         incorrect: 0,
         extra: 0,
-        missed: 0
+        missed: 0,
+        time: elapsed // ✅ record real elapsed time
       };
 
-      // Count correct, incorrect, and missed characters
       [...currentLine].forEach((char, idx) => {
         if (idx < typedText.length) {
-          if (typedText[idx] === char) {
-            lineStats.correct++;
-          } else {
-            lineStats.incorrect++;
-          }
-        } else {
-          lineStats.missed++;
-        }
+          if (typedText[idx] === char) lineStats.correct++;
+          else lineStats.incorrect++;
+        } else lineStats.missed++;
       });
 
-      // Count extra characters (typed chars beyond line length)
       lineStats.extra = Math.max(0, typedText.length - currentLine.length);
-
-      setCompletedLinesStats(prev => [...prev, lineStats]);
-      setWindowLineIndex(prev => prev + 1);
+      setCompletedLinesStats((prev) => [...prev, lineStats]);
+      setWindowLineIndex((prev) => prev + 1);
       setTypedText("");
     }
   }, [typedText, visibleLines, started, finished]);
 
   const finishGame = async () => {
     setFinished(true);
-    if (!session) {
-      signIn();
-      return;
-    }
+    if (!session) return signIn();
 
-    // Calculate total characters typed and correct characters
     let totalChars = 0;
     let totalCorrectChars = 0;
 
-    // Count completed lines using stored stats
-    completedLinesStats.forEach(stat => {
+    completedLinesStats.forEach((stat) => {
       totalChars += stat.total;
       totalCorrectChars += stat.correct;
     });
 
-    // Add current line stats
     const currentLine = visibleLines[0] || "";
     if (typedText.length > 0) {
       totalChars += typedText.length;
-      totalCorrectChars += [...typedText].filter(
-        (char, idx) => char === currentLine[idx]
-      ).length;
+      totalCorrectChars += [...typedText].filter((c, i) => c === currentLine[i]).length;
     }
 
-    // Calculate time
     const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
     const elapsedSeconds = Math.round(elapsedMs / 1000);
-    const minutes = Math.max(0.0166667, elapsedMs / 1000 / 60);
-
-    // Calculate WPM and accuracy
+    const minutes = Math.max(0.0167, elapsedMs / 1000 / 60);
     const wpm = Math.round((totalCorrectChars / 5) / minutes);
-    const accuracy = totalChars > 0 
-      ? Math.round((totalCorrectChars / totalChars) * 100)
-      : 0;
+    const accuracy = totalChars > 0 ? Math.round((totalCorrectChars / totalChars) * 100) : 0;
 
-    // Calculate totals including extra and missed
-    let totalStats = {
-      correct: 0,
-      incorrect: 0,
-      extra: 0,
-      missed: 0
-    };
+    // ✅ create history with real time values
+    const history = completedLinesStats.map((s) => ({
+      time: s.time,
+      wpm: Math.round((s.correct / 5) / ((s.time || 1) / 60))
+    }));
 
-    completedLinesStats.forEach(stat => {
-      totalStats.correct += stat.correct;
-      totalStats.incorrect += stat.incorrect;
-      totalStats.extra += stat.extra;
-      totalStats.missed += stat.missed;
-    });
-
-    // Add current line stats if any
-    if (typedText.length > 0) {
-      [...currentLine].forEach((char, idx) => {
-        if (idx < typedText.length) {
-          if (typedText[idx] === char) {
-            totalStats.correct++;
-          } else {
-            totalStats.incorrect++;
-          }
-        } else {
-          totalStats.missed++;
-        }
-      });
-      totalStats.extra += Math.max(0, typedText.length - currentLine.length);
-    }
-
-    // Calculate WPM history from the start
-    const history = [];
-    const dataInterval = 2;
-    const markInterval = 5;
-
-    for (let i = 0; i <= elapsedSeconds; i += dataInterval) {
-      const timePoint = Math.max(1, i); // Ensure minimum 1 second
-      const partialStats = completedLinesStats.filter((_, index) => {
-        const statTime = (index + 1) * (elapsedSeconds / completedLinesStats.length);
-        return statTime <= timePoint;
-      });
-
-      let partialCorrect = partialStats.reduce((sum, stat) => sum + stat.correct, 0);
-      let partialMinutes = timePoint / 60;
-      let partialWpm = Math.round((partialCorrect / 5) / partialMinutes);
-
+    // ✅ push a final point to mark the end of test
+    if (history.length === 0 || history[history.length - 1].time < elapsedSeconds) {
       history.push({
-        time: i,
-        wpm: partialWpm,
-        isMark: i % markInterval === 0
+        time: elapsedSeconds,
+        wpm
       });
     }
-
-    // Add final data point
-    history.push({
-      time: elapsedSeconds,
-      wpm: wpm,
-      isMark: true // Always mark the final point
-    });
-
-    // Prepare results data
-    const results = {
-      wpm,
-      accuracy,
-      time: elapsedSeconds,
-      score: totalStats.correct,
-      history,
-      dataInterval,
-      markInterval,
-      characterStats: totalStats
-    };
 
     try {
-      // Save results to database
-      await axios.post("/api/games", { 
-        wpm, 
-        accuracy, 
-        score: totalCorrectChars, 
-        difficulty 
-      });
-
-      // Reset game state
-      setStarted(false);
-      setFinished(false);
-      setTypedText("");
-      setWindowLineIndex(0);
-      setCompletedLinesStats([]);
-
-      // Navigate to results page with data
+      await axios.post("/api/games", { wpm, accuracy, score: totalCorrectChars, difficulty });
       router.push({
-        pathname: '/result',
-        query: { 
-          results: JSON.stringify(results)
+        pathname: "/result",
+        query: {
+          results: JSON.stringify({
+            wpm,
+            accuracy,
+            time: elapsedSeconds,
+            history,
+            characterStats: {
+              correct: totalCorrectChars,
+              incorrect: completedLinesStats.reduce((a, s) => a + s.incorrect, 0),
+              extra: completedLinesStats.reduce((a, s) => a + s.extra, 0),
+              missed: completedLinesStats.reduce((a, s) => a + s.missed, 0)
+            }
+          })
         }
       });
-
     } catch (err) {
       console.error(err);
       alert("Failed to save results.");
@@ -266,14 +174,11 @@ export default function TypingGame() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded-3xl shadow-2xl">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">
-        Typing Game
-      </h2>
+    <div className="max-w-3xl mx-auto p-4 bg-white rounded-3xl shadow-2xl">
+      <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Typing Game</h2>
 
-      {/* Controls */}
       {!started && (
-        <div className="flex justify-center items-center gap-6 mb-6">
+        <div className="flex flex-wrap justify-center items-center gap-3 mb-6">
           {["easy", "medium", "hard"].map((level) => (
             <button
               key={level}
@@ -287,7 +192,7 @@ export default function TypingGame() {
               {level.charAt(0).toUpperCase() + level.slice(1)}
             </button>
           ))}
-          <div className="h-8 w-px bg-gray-300"></div>
+          <div className="h-8 w-px bg-gray-300 hidden sm:block"></div>
           {["15s", "30s", "1m", "Unlimited"].map((t) => (
             <button
               key={t}
@@ -304,14 +209,12 @@ export default function TypingGame() {
         </div>
       )}
 
-      {/* Timer */}
       {started && timer !== "Unlimited" && (
         <div className="text-center mb-4 font-mono text-xl font-bold text-gray-900">
           {timeLeft}s
         </div>
       )}
 
-      {/* Sentence Display */}
       <div
         ref={containerRef}
         className="mb-4 p-4 bg-purple-50 rounded-lg font-mono text-lg leading-relaxed h-[4.5rem] overflow-hidden text-gray-400"
@@ -321,8 +224,7 @@ export default function TypingGame() {
             {line.split("").map((char, charIdx) => {
               let colorClass = "text-gray-400";
               if (lineIdx === 0 && charIdx < typedText.length) {
-                colorClass =
-                  typedText[charIdx] === char ? "text-green-600" : "text-red-600";
+                colorClass = typedText[charIdx] === char ? "text-green-600" : "text-red-600";
               }
               return (
                 <span key={`${lineIdx}-${charIdx}`} className={colorClass}>
@@ -334,20 +236,17 @@ export default function TypingGame() {
         ))}
       </div>
 
-      {/* Input */}
-      <textarea
+      <input
+        ref={inputRef}
+        type="text"
         value={typedText}
-        onChange={(e) => {
-          if (!started || finished) return;
-          setTypedText(e.target.value);
-        }}
-        className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 mb-4 text-gray-900"
+        onChange={(e) => setTypedText(e.target.value)}
+        className="w-full px-4 py-2 bg-white text-gray-900 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
         disabled={!started || finished}
-        rows={4}
+        placeholder={started ? "Type here..." : "Click start to begin"}
       />
 
-      {/* Start / Finish */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+      <div className="flex flex-col md:flex-row justify-center gap-4 mb-4 mt-6"> {/* Added mt-6 for margin-top */}
         {!started && (
           <button
             onClick={startGame}
@@ -367,9 +266,9 @@ export default function TypingGame() {
       </div>
 
       {finished && (
-        <div className="mt-4 text-center text-gray-700 font-medium">
-          Game Finished! Your results are saved.
-        </div>
+        <p className="mt-4 text-center text-gray-700 font-medium">
+          ✅ Game Finished! Your results are saved.
+        </p>
       )}
     </div>
   );

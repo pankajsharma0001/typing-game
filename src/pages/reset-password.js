@@ -232,6 +232,11 @@ export default function ResetPassword() {
             "Reset Password"
           )}
         </button>
+        {/* Add copyright notice */}
+        <div className="fixed bottom-4 right-4 text-right text-sm text-gray-500">
+          <p>© {new Date().getFullYear()} Typing Game</p>
+          <p className="text-purple-600">Made by Pankaj Sharma</p>
+        </div>
       </div>
 
       <style jsx>{`

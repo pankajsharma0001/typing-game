@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Login() {
   const router = useRouter();
@@ -201,7 +202,7 @@ export default function Login() {
             </div>
           ) : (
             <>
-              <img src="/google-logo.svg" alt="Google Logo" className="w-6 h-6 mr-3" />
+              <Image src="/google-logo.svg" alt="Google Logo" className="w-6 h-6 mr-3" width={40} height={40}/>
               Login with Google
             </>
           )}

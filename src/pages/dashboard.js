@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import TypingGame from "../components/TypingGame";
 import { User as UserIcon } from "lucide-react";
+import Image from "next/image";
 
 export default function Dashboard() {
   const { data: session, update: updateSession, status } = useSession();
@@ -100,7 +101,7 @@ export default function Dashboard() {
     return <p className="text-center mt-10 text-gray-300">Redirecting to login...</p>;
   }
 
-  const profileImage = session.user.image;
+  const profileImage = session.user.image || "/default-avatar.png";
 
   const handleProfileClick = async () => {
     setIsLoadingProfile(true);
@@ -136,10 +137,12 @@ export default function Dashboard() {
           onClick={() => setDropdownOpen(!dropdownOpen)}
         >
           {profileImage ? (
-            <img
+            <Image
               src={profileImage}
               alt="Profile"
               className="absolute inset-0 w-full h-full object-cover"
+              width = {40}
+              height = {40}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-700">

@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useState, useRef, useEffect } from "react";
 import { Edit as EditIcon } from "lucide-react";
 import EditProfileModal from "../components/EditProfileModal";
+import Image from "next/image";
 
 export default function Profile() {
   const { data: session, update: updateSession } = useSession();
@@ -113,13 +114,15 @@ export default function Profile() {
 
         {/* Profile Image */}
         <div className="relative w-24 h-24 mx-auto mb-4">
-          <img
+          <Image
             src={profileImage}
             alt="Profile"
             className="w-24 h-24 rounded-full mx-auto cursor-pointer border border-gray-600"
             onClick={() => fileInputRef.current.click()}
             onError={handleImageError}
             referrerPolicy="no-referrer"
+            width={40}
+            height={40}
           />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full">

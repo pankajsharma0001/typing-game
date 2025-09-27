@@ -6,36 +6,40 @@ import { useRouter } from "next/router";
 export default function TypingGame() {
   const router = useRouter();
   const startTimeRef = useRef(null);
-  const containerRef = useRef(null);
-  const inputRef = useRef(null);
   const { data: session } = useSession();
 
   const [difficulty, setDifficulty] = useState("easy");
   const [sentences, setSentences] = useState([]);
   const [timer, setTimer] = useState("30s");
   const [timeLeft, setTimeLeft] = useState(30);
+  const [elapsed, setElapsed] = useState(0); // For Unlimited mode
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
   const [typedText, setTypedText] = useState("");
+  const [pendingStart, setPendingStart] = useState(false); 
+  const [firstKey, setFirstKey] = useState(""); // Store first key pressed
 
   const [windowLineIndex, setWindowLineIndex] = useState(0);
   const [visibleLines, setVisibleLines] = useState([]);
   const [completedLinesStats, setCompletedLinesStats] = useState([]);
 
-  const timerInSeconds =
-    timer === "15s" ? 15 : timer === "30s" ? 30 : timer === "1m" ? 60 : Infinity;
-
   // Fetch sentences
   useEffect(() => {
-    setTimeLeft(timerInSeconds);
-    setStarted(false);
-    setFinished(false);
-    setTypedText("");
-    setWindowLineIndex(0);
-    setVisibleLines([]);
-    setCompletedLinesStats([]);
-
     async function fetchSentences() {
+      setTimeLeft(
+        timer === "15s" ? 15 :
+        timer === "30s" ? 30 :
+        timer === "1m"  ? 60 :
+        Infinity
+      );
+      setElapsed(0);
+      setStarted(false);
+      setFinished(false);
+      setTypedText("");
+      setWindowLineIndex(0);
+      setVisibleLines([]);
+      setCompletedLinesStats([]);
+
       try {
         const res = await axios.get(`/api/sentences?difficulty=${difficulty}&count=20`);
         setSentences(res.data.map((s) => ({ text: s.text || "" })));
@@ -44,11 +48,10 @@ export default function TypingGame() {
         setSentences([]);
       }
     }
-
     fetchSentences();
   }, [difficulty, timer]);
 
-  // Timer countdown
+  // Countdown timer for fixed modes
   useEffect(() => {
     if (!started || finished || timeLeft === Infinity) return;
     if (timeLeft === 0) {
@@ -59,6 +62,13 @@ export default function TypingGame() {
     return () => clearInterval(interval);
   }, [timeLeft, started, finished]);
 
+  // Elapsed timer for Unlimited mode
+  useEffect(() => {
+    if (!started || finished || timer !== "Unlimited") return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [started, finished, timer]);
+
   const wrapIndex = (idx) => (sentences.length ? idx % sentences.length : 0);
 
   useEffect(() => {
@@ -68,24 +78,58 @@ export default function TypingGame() {
     setVisibleLines([sentences[firstIdx]?.text || "", sentences[secondIdx]?.text || ""]);
   }, [windowLineIndex, sentences]);
 
-  const startGame = () => {
-    setStarted(true);
-    setFinished(false);
-    setTypedText("");
-    setTimeLeft(timerInSeconds);
-    setCompletedLinesStats([]);
-    startTimeRef.current = Date.now();
-    // Add a small delay to ensure the input is rendered
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
-  };
+  // Start game after first alphabet key
+  useEffect(() => {
+    if (pendingStart && !started) {
+      const seconds =
+        timer === "15s" ? 15 :
+        timer === "30s" ? 30 :
+        timer === "1m"  ? 60 :
+        Infinity;
 
+      setStarted(true);
+      setFinished(false);
+      setTypedText(firstKey); // ✅ Preserve first key
+      setTimeLeft(seconds);
+      setElapsed(0);
+      setCompletedLinesStats([]);
+      startTimeRef.current = Date.now();
+      setPendingStart(false);
+      setFirstKey(""); // reset
+    }
+  }, [pendingStart, started, timer, firstKey]);
+
+  // Handle key presses
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (finished) return;
+
+      const isLetter = /^[a-zA-Z]$/.test(e.key);
+      if (!started && !pendingStart && isLetter) {
+        setFirstKey(e.key);     
+        setPendingStart(true);  
+        return;
+      }
+
+      if (!started) return;
+
+      if (e.key === "Backspace") {
+        setTypedText((prev) => prev.slice(0, -1));
+      } else if (e.key.length === 1) {
+        setTypedText((prev) => prev + e.key);
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [started, finished, pendingStart]);
+
+  // Line completion detection
   useEffect(() => {
     if (!started || finished || !visibleLines.length) return;
     const currentLine = visibleLines[0];
     if (typedText.length === currentLine.length) {
-      const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000);
+      const elapsedSec = Math.round((Date.now() - startTimeRef.current) / 1000);
 
       const lineStats = {
         total: currentLine.length,
@@ -93,14 +137,12 @@ export default function TypingGame() {
         incorrect: 0,
         extra: 0,
         missed: 0,
-        time: elapsed // ✅ record real elapsed time
+        time: elapsedSec
       };
 
       [...currentLine].forEach((char, idx) => {
-        if (idx < typedText.length) {
-          if (typedText[idx] === char) lineStats.correct++;
-          else lineStats.incorrect++;
-        } else lineStats.missed++;
+        if (typedText[idx] === char) lineStats.correct++;
+        else lineStats.incorrect++;
       });
 
       lineStats.extra = Math.max(0, typedText.length - currentLine.length);
@@ -110,6 +152,7 @@ export default function TypingGame() {
     }
   }, [typedText, visibleLines, started, finished]);
 
+  // Finish game
   const finishGame = async () => {
     setFinished(true);
     if (!session) return signIn();
@@ -134,18 +177,13 @@ export default function TypingGame() {
     const wpm = Math.round((totalCorrectChars / 5) / minutes);
     const accuracy = totalChars > 0 ? Math.round((totalCorrectChars / totalChars) * 100) : 0;
 
-    // ✅ create history with real time values
     const history = completedLinesStats.map((s) => ({
       time: s.time,
       wpm: Math.round((s.correct / 5) / ((s.time || 1) / 60))
     }));
 
-    // ✅ push a final point to mark the end of test
     if (history.length === 0 || history[history.length - 1].time < elapsedSeconds) {
-      history.push({
-        time: elapsedSeconds,
-        wpm
-      });
+      history.push({ time: elapsedSeconds, wpm });
     }
 
     try {
@@ -174,7 +212,7 @@ export default function TypingGame() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-4 bg-white rounded-3xl shadow-2xl">
+    <div className="max-w-3xl mx-auto p-4 bg-white rounded-3xl shadow-2xl select-none">
       <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Typing Game</h2>
 
       {!started && (
@@ -215,10 +253,13 @@ export default function TypingGame() {
         </div>
       )}
 
-      <div
-        ref={containerRef}
-        className="mb-4 p-4 bg-purple-50 rounded-lg font-mono text-lg leading-relaxed h-[4.5rem] overflow-hidden text-gray-400"
-      >
+      {started && timer === "Unlimited" && (
+        <div className="text-center mb-4 font-mono text-xl font-bold text-gray-900">
+          Elapsed: {elapsed}s
+        </div>
+      )}
+
+      <div className="mb-4 p-4 bg-purple-50 rounded-lg font-mono text-lg leading-relaxed h-[4.5rem] overflow-hidden text-gray-400">
         {visibleLines.map((line, lineIdx) => (
           <div key={`line-${lineIdx}`} className="whitespace-pre">
             {line.split("").map((char, charIdx) => {
@@ -236,34 +277,14 @@ export default function TypingGame() {
         ))}
       </div>
 
-      <input
-        ref={inputRef}
-        type="text"
-        value={typedText}
-        onChange={(e) => setTypedText(e.target.value)}
-        className="w-full px-4 py-2 bg-white text-gray-900 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-        disabled={!started || finished}
-        placeholder={started ? "Type here..." : "Click start to begin"}
-      />
-
-      <div className="flex flex-col md:flex-row justify-center gap-4 mb-4 mt-6"> {/* Added mt-6 for margin-top */}
-        {!started && (
-          <button
-            onClick={startGame}
-            className="bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-800 transition-colors"
-          >
-            Start
-          </button>
-        )}
-        {started && !finished && timer === "Unlimited" && (
-          <button
-            onClick={finishGame}
-            className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors"
-          >
-            Finish
-          </button>
-        )}
-      </div>
+      {started && !finished && timer === "Unlimited" && (
+        <button
+          onClick={finishGame}
+          className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+        >
+          Finish
+        </button>
+      )}
 
       {finished && (
         <p className="mt-4 text-center text-gray-700 font-medium">
@@ -271,7 +292,6 @@ export default function TypingGame() {
         </p>
       )}
 
-      {/* Add copyright notice */}
       <div className="fixed bottom-4 right-4 text-right text-sm text-gray-500">
         <p>© {new Date().getFullYear()} Typing Game</p>
         <p className="text-purple-600">Made by Pankaj Sharma</p>
